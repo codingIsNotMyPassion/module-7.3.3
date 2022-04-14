@@ -1,124 +1,155 @@
 require("dotenv").config();
 const express = require("express");
+const mongodb = require("mongodb");
+const mongoClient = require('mongodb');
+const dbUrl = "mongodb+srv://student-mentor:Ye7XMbvkDdDdOfKI@cluster0.npjnd.mongodb.net"
+  
 const app = express();
+const port = process.env.PORT || 4000;
+
+app.get("/", (req, res) => {
+  res.send("Hello server is up and running");
+});
 
 app.use(express.json());
 
-//room
-const rooms = [
-  {
-    name: "Elite",
-    seats: 100,
-    amenities: "wifi,projection screen,AC",
-    price: 15000,
-    roomId: "abc",
-    bookingDetails: [
-      {
-        customerName: "krishna",
-        date: new Date("2022-04-14"),
-        start: "07:00",
-        end: "10:00",
-        status: "confirmed",
-      },
-    ],
-  },
-  {
-    name: "Premium",
-    seats: 150,
-    amenities: "wifi,projection screen,AC",
-    price: 10000,
-    roomId: "def",
-    bookingDetails: [
-      {
-        customerName: "sai",
-        date: new Date("2022-04-15"),
-        start: "15:00",
-        end: "17:00",
-        status: "Payment Pending",
-      },
-    ],
-  },
-];
-
-//common call api status
-app.get("/", (req, res) => {
-  res.status(200).send("Server is running successfully ");
-});
-
-//create room
-app.post("/createRoom", (req, res) => {
-  rooms.push({
-    name: req.body.name,
-    seats: req.body.seats,
-    amenities: req.body.amenities,
-    price: req.body.price,
-    roomId: "xyz",
-    bookingDetails: [{}],
-  });
-  res.status(200).send("Room Created");
-});
-
-//Book rooms
-app.post("/bookRoom", (req, res, next) => {
-  for (let i = 0; i < rooms.length; i++) {
-    console.log("a");
-    if (!(rooms[i].roomId === req.body.roomId)) {
-      return res.status(400).send({ error: "Invalid" });
-    } else {
-      let booking = {
-        customerName: req.body.name,
-        date: new Date(req.body.date),
-        start: req.body.start,
-        end: req.body.end,
-        status: "confirmed",
-      };
-      let result = undefined;
-      rooms[i].bookingDetails.forEach((book) => {
-        if (
-          book.date.getTime() == booking.date.getTime() &&
-          book.start === booking.start
-        ) {
-          result = 0;
-          console.log("in booking");
-        } else {
-          result = 1;
-          rooms[i].bookingDetails.push(booking);
-        }
+app.get("/mentor", (req, res) => {
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("Guvi");
+    db.collection("mentor")
+      .find()
+      .toArray()
+      .then((data) => {
+        res.status(200).json(data);
+      })
+      .catch((error) => {
+        res.status(400).json({
+          message: "Data not found",
+          error,
+        });
       });
-      if (result) return res.status(200).send("Booking confirmed");
-      else
-        return res
-          .status(400)
-          .send({ error: "Please select different time slot" });
-    }
+  });
+});
+
+app.get("/student", (req, res) => {
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("Guvi");
+    db.collection("student")
+      .find()
+      .toArray()
+      .then((data) => {
+        res.status(200).json(data);
+      })
+      .catch((error) => {
+        res.status(400).json({
+          message: "Data not found",
+          error,
+        });
+      });
+  });
+});
+
+app.post("/create-mentor", async (req, res) => {
+  try {
+    let client = await mongoClient.connect(dbUrl);
+    let db = client.db("Guvi");
+    await db.collection("mentor").insertOne(req.body);
+    res.status(200).json({
+      message: "Mentor created",
+    });
+    client.close();
+  } catch (error) {
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
   }
 });
 
-//list customers
-app.get("/listCustomer", (req, res) => {
-  let customerArray = [];
-  rooms.forEach((room) => {
-    let customerObj = { roomName: room.name };
-
-    room.bookingDetails.forEach((customer) => {
-      customerObj.customerName = customer.customerName;
-      customerObj.date = customer.date;
-      customerObj.start = customer.start;
-      customerObj.end = customer.end;
-      customerArray.push(customerObj);
+app.post("/create-student", async (req, res) => {
+  try {
+    let client = await mongoClient.connect(dbUrl);
+    let db = client.db("Guvi");
+    await db.collection("student").insertOne(req.body);
+    res.status(200).json({
+      message: "Student created",
     });
+    client.close();
+  } catch (error) {
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+});
+
+app.put("/update-mentor/:name", async (req, res) => {
+  try {
+    let name = req.params.name;
+    
+    req.body.Students.forEach(async (obj) => {
+      let client = await mongoClient.connect(dbUrl);
+      let db = client.db("Guvi");
+    
+      let student_data = await db.collection("student").find({ name: obj }).toArray();
+      if (!student_data[0].mentor) {
+        await db.collection("student").findOneAndUpdate({ name: obj }, { $set: { mentor: name } }); 
+        await db.collection("mentor").findOneAndUpdate({ name },{$addToSet : {Students  : { $each: [obj] }}});
+        
+      }
+       
+    }); 
+    res.status(200).json({
+      message: "Mentor created",
+    });   
+    
+  } catch (error) {
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+});
+
+app.put("/update-student-mentor/:studentName", async (req, res) => {
+  try {
+    let name = req.params.studentName;
+    let client = await mongoClient.connect(dbUrl);
+    let db = client.db("Guvi");
+    let student_data = await db.collection("student").find({ name }).toArray();
+    let mentor_data = student_data[0].mentor;
+    await db.collection("student").findOneAndUpdate({ name }, { $set: { mentor: req.body.mentor } });
+    await db.collection("mentor").findOneAndUpdate({ name: req.body.mentor },{$addToSet : {Students  : { $each: [name] }}});
+    await db.collection("mentor").findOneAndUpdate({ name: mentor_data },{$pull : {Students  : name}});
+    res.status(200).json({
+      message: "Mentor Updated",
+    });   
+    
+  } catch (error) {
+    res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
+});
+
+app.get("/studentlist/:mentor", async (req, res) => {
+  let client = await mongoClient.connect(dbUrl);
+  let db = client.db("Guvi");
+  let mentor = await db.collection("mentor").find({ name: req.params.mentor }).toArray();
+  if(mentor){
+  res.status(200).json({
+    message: "Student Details of Mentor",
+    data : mentor[0].Students
   });
-  res.send(customerArray);
+  }
+  else{
+    res.status(404).json({
+      message:"No mentor data found"
+    })
+  }
 });
 
-//get rooms
-app.get("/listRooms", (req, res) => {
-  console.log("list rooms");
-  res.status(200).send(rooms);
-});
 
-const port = process.env.PORT || 8000;
 
 app.listen(port, () => {
-  console.log(`server started at ${port}`);
+  console.log("You are using the port" + port);
 });
