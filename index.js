@@ -1,37 +1,124 @@
 require("dotenv").config();
-
 const express = require("express");
-
 const app = express();
-const fs = require("fs");
 
-//create file
-app.get("/createfile", (req, res, next) => {
-  console.log("create file process");
+app.use(express.json());
 
-  let date = new Date();
-  let fileName = `${date.toISOString()}.txt`;
-  console.log(fileName);
-  fileName = fileName.slice(0, 19).replace(/:/g, "-");
+//room
+const rooms = [
+  {
+    name: "Elite",
+    seats: 100,
+    amenities: "wifi,projection screen,AC",
+    price: 15000,
+    roomId: "abc",
+    bookingDetails: [
+      {
+        customerName: "krishna",
+        date: new Date("2022-04-14"),
+        start: "07:00",
+        end: "10:00",
+        status: "confirmed",
+      },
+    ],
+  },
+  {
+    name: "Premium",
+    seats: 150,
+    amenities: "wifi,projection screen,AC",
+    price: 10000,
+    roomId: "def",
+    bookingDetails: [
+      {
+        customerName: "sai",
+        date: new Date("2022-04-15"),
+        start: "15:00",
+        end: "17:00",
+        status: "Payment Pending",
+      },
+    ],
+  },
+];
 
-  let data = `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
-  console.log("after", fileName, typeof data);
-  
-  //write file
-  fs.writeFileSync(`./Files/${fileName}.txt`, data, (err) => {
-    if (err) console.log(err);
-  });
-  res.status(200).send("file created");
+//common call api status
+app.get("/", (req, res) => {
+  res.status(200).send("Server is running successfully ");
 });
 
-// retriving the data
-app.get("/getfile", (req, res) => {
-  let storage = fs.readdirSync("./Files");
-  console.log(storage);
-  res.send(storage);
+//create room
+app.post("/createRoom", (req, res) => {
+  rooms.push({
+    name: req.body.name,
+    seats: req.body.seats,
+    amenities: req.body.amenities,
+    price: req.body.price,
+    roomId: "xyz",
+    bookingDetails: [{}],
+  });
+  res.status(200).send("Room Created");
+});
+
+//Book rooms
+app.post("/bookRoom", (req, res, next) => {
+  for (let i = 0; i < rooms.length; i++) {
+    console.log("a");
+    if (!(rooms[i].roomId === req.body.roomId)) {
+      return res.status(400).send({ error: "Invalid" });
+    } else {
+      let booking = {
+        customerName: req.body.name,
+        date: new Date(req.body.date),
+        start: req.body.start,
+        end: req.body.end,
+        status: "confirmed",
+      };
+      let result = undefined;
+      rooms[i].bookingDetails.forEach((book) => {
+        if (
+          book.date.getTime() == booking.date.getTime() &&
+          book.start === booking.start
+        ) {
+          result = 0;
+          console.log("in booking");
+        } else {
+          result = 1;
+          rooms[i].bookingDetails.push(booking);
+        }
+      });
+      if (result) return res.status(200).send("Booking confirmed");
+      else
+        return res
+          .status(400)
+          .send({ error: "Please select different time slot" });
+    }
+  }
+});
+
+//list customers
+app.get("/listCustomer", (req, res) => {
+  let customerArray = [];
+  rooms.forEach((room) => {
+    let customerObj = { roomName: room.name };
+
+    room.bookingDetails.forEach((customer) => {
+      customerObj.customerName = customer.customerName;
+      customerObj.date = customer.date;
+      customerObj.start = customer.start;
+      customerObj.end = customer.end;
+      customerArray.push(customerObj);
+    });
+  });
+  res.send(customerArray);
+});
+
+//get rooms
+app.get("/listRooms", (req, res) => {
+  console.log("list rooms");
+  res.status(200).send(rooms);
 });
 
 const port = process.env.PORT || 8000;
+
 app.listen(port, () => {
-  console.log("sever started at ", port);
+  console.log(`server started at ${port}`);
 });
